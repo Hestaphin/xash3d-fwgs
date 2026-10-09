@@ -145,3 +145,4 @@ To build you should clone [SDL](https://github.com/libsdl-org/SDL) from `SDL2` b
 Tests are enabled with `--enable-tests` passed to `./waf configure` and can be run with `./waf --alltests`.
 
 This builds both standalone unit tests and a separate engine test binary (`xash3d_tests`) that embeds engine-level tests. The engine test binary requires no game assets.
+
