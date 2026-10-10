@@ -49,7 +49,7 @@ SampleMiptex
 fence texture testing
 =============
 */
-static int PM_SampleMiptex( const msurface_t *surf, const vec3_t point )
+int PM_SampleMiptex( const msurface_t *surf, const vec3_t point )
 {
 	mextrasurf_t	*info = surf->info;
 	mfacebevel_t	*fb = info->bevel;

@@ -18,6 +18,8 @@ GNU General Public License for more details.
 #include "const.h"
 #include "pm_local.h"
 #include "studio.h"
+#include "world_ballistic_query.h"
+#include "world_solid_interval.h"
 
 typedef struct moveclip_s
 {
@@ -1418,6 +1420,9 @@ msurface_t *GAME_EXPORT SV_TraceSurface( edict_t *ent, const vec3_t start, const
 
 	return PM_RecursiveSurfCheck( bmodel, &bmodel->nodes[hull->firstclipnode], start_l, end_l );
 }
+
+// Included here after SV_HullForBsp; also compiled by the isolated service test.
+#include "world_ballistic_query_impl.h"
 
 /*
 ==================
