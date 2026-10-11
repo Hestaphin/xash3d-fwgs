@@ -2863,7 +2863,41 @@ static void SV_EntSendVars( sv_client_t *cl, edict_t *ent )
 	MSG_WriteByte( &cl->netchan.message, svc_stufftext );
 	MSG_WriteStringf( &cl->netchan.message, "set ent_last_class \"%s\"\n", SV_GetString( ent->v.classname ));
 	MSG_WriteByte( &cl->netchan.message, svc_stufftext );
-	MSG_WriteString( &cl->netchan.message, "ent_getvars_cb\n" ); // why do we need this?
+	MSG_WriteString( &cl->netchan.message, "ent_getvars_cb\n" ); // optional client alias; quiet default
+}
+
+static qboolean SV_EntCreateIsAlive( edict_t *ent, int serial )
+{
+	return SV_IsValidEdict( ent ) && ent->serialnumber == serial &&
+		!FBitSet( ent->v.flags, FL_KILLME );
+}
+
+static qboolean SV_EntToolSetOrigin( edict_t *ent, const vec3_t origin )
+{
+	vec3_t requested;
+	int serial = ent->serialnumber;
+	VectorCopy( origin, requested );
+
+	// PrimeXT keeps a game-side local transform as well as the edict origin.
+	// Use its normal keyvalue path before linking or running FallThink.
+	if( svgame.dllFuncs.pfnKeyValue )
+	{
+		string value;
+		KeyValueData kvd = {
+			.szClassName = (char *)SV_GetString( ent->v.classname ),
+			.szKeyName = (char *)"origin",
+			.szValue = value,
+		};
+		Q_snprintf( value, sizeof( value ), "%.9g %.9g %.9g", requested[0], requested[1], requested[2] );
+		svgame.dllFuncs.pfnKeyValue( ent, &kvd );
+		if( !SV_EntCreateIsAlive( ent, serial ))
+			return false;
+		if( kvd.fHandled )
+			return true;
+	}
+
+	VectorCopy( requested, ent->v.origin );
+	return true;
 }
 
 /*
@@ -2877,6 +2911,8 @@ static qboolean SV_EntCreate_f( sv_client_t *cl )
 {
 	edict_t	*ent = NULL;
 	int	i = 0;
+	int serial;
+	vec3_t origin;
 	string_t classname;
 
 	if( Cmd_Argc() < 2 )
@@ -2887,7 +2923,7 @@ static qboolean SV_EntCreate_f( sv_client_t *cl )
 
 	classname = SV_AllocString( Cmd_Argv( 1 ) );
 
-	ent = SV_CreateNamedEntity( 0, classname );
+	ent = SV_CreateNamedEntityQuiet( NULL, classname );
 
 	// Xash3D extension
 	if( !ent && svgame.physFuncs.SV_CreateEntity )
@@ -2924,16 +2960,23 @@ static qboolean SV_EntCreate_f( sv_client_t *cl )
 
 	if( !ent )
 	{
-		SV_ClientPrintf( cl, "Invalid entity!\n" );
+		SV_ClientPrintf( cl, "No spawn function for \"%s\"\n", SV_GetString( classname ));
 		return false;
 	}
+	serial = ent->serialnumber;
+	if( !SV_EntCreateIsAlive( ent, serial ))
+		goto failed;
 
 	// choose default origin
-	ent->v.origin[2] = cl->edict->v.origin[2] + 25;
-	ent->v.origin[1] = cl->edict->v.origin[1] + 100 * sin( DEG2RAD( cl->edict->v.angles[1] ) );
-	ent->v.origin[0] = cl->edict->v.origin[0] + 100 * cos( DEG2RAD( cl->edict->v.angles[1] ) );
+	origin[2] = cl->edict->v.origin[2] + 25;
+	origin[1] = cl->edict->v.origin[1] + 100 * sin( DEG2RAD( cl->edict->v.angles[1] ) );
+	origin[0] = cl->edict->v.origin[0] + 100 * cos( DEG2RAD( cl->edict->v.angles[1] ) );
+	if( !SV_EntToolSetOrigin( ent, origin ))
+		goto failed;
 
 	SV_LinkEdict( ent, false );
+	if( !SV_EntCreateIsAlive( ent, serial ))
+		goto failed;
 
 	// apply keyvalues if supported
 	if( svgame.dllFuncs.pfnKeyValue )
@@ -2956,6 +2999,8 @@ static qboolean SV_EntCreate_f( sv_client_t *cl )
 				.szValue = value,
 			};
 			svgame.dllFuncs.pfnKeyValue( ent, &pkvd );
+			if( !SV_EntCreateIsAlive( ent, serial ))
+				goto failed;
 
 			if( pkvd.fHandled )
 				SV_ClientPrintf( cl, "value \"%s\" set to \"%s\"!\n", pkvd.szKeyName, pkvd.szValue );
@@ -2988,20 +3033,25 @@ static qboolean SV_EntCreate_f( sv_client_t *cl )
 		// but we will not lose anything in this case.
 		Q_strnlwr( newname, newname, sizeof( newname ));
 		ent->v.targetname = SV_AllocString( newname );
-		SV_EntSendVars( cl, ent );
 	}
 
-	SV_ClientPrintf( cl, "Created %i: %s, targetname %s\n", NUM_FOR_EDICT( ent ), Cmd_Argv( 1 ), SV_GetString( ent->v.targetname ) );
-
-	if( svgame.dllFuncs.pfnSpawn )
-		svgame.dllFuncs.pfnSpawn( ent );
+	if( !svgame.dllFuncs.pfnSpawn || svgame.dllFuncs.pfnSpawn( ent ) < 0 ||
+		!SV_EntCreateIsAlive( ent, serial ))
+		goto failed;
 
 	// now drop entity to floor.
 	pfnDropToFloor( ent );
+	if( !SV_EntCreateIsAlive( ent, serial ) || !SV_EntToolSetOrigin( ent, ent->v.origin ))
+		goto failed;
 
 	// force think. Otherwise given weapon may crash server if player touch it before.
-	svgame.dllFuncs.pfnThink( ent );
+	if( svgame.dllFuncs.pfnThink )
+		svgame.dllFuncs.pfnThink( ent );
+	if( !SV_EntCreateIsAlive( ent, serial ))
+		goto failed;
 	pfnDropToFloor( ent );
+	if( !SV_EntCreateIsAlive( ent, serial ) || !SV_EntToolSetOrigin( ent, ent->v.origin ))
+		goto failed;
 
 	// apply postspawn keyvales if supported
 	if( svgame.dllFuncs.pfnKeyValue )
@@ -3020,12 +3070,29 @@ static qboolean SV_EntCreate_f( sv_client_t *cl )
 				.szValue = value,
 			};
 			svgame.dllFuncs.pfnKeyValue( ent, &pkvd );
+			if( !SV_EntCreateIsAlive( ent, serial ))
+				goto failed;
 
 			if( pkvd.fHandled )
 				SV_ClientPrintf( cl, "value \"%s\" set to \"%s\"!\n", pkvd.szKeyName, pkvd.szValue );
 		}
 	}
+	SV_LinkEdict( ent, false );
+	if( !SV_EntCreateIsAlive( ent, serial ))
+		goto failed;
+
+	SV_ClientPrintf( cl, "Created %i: %s, targetname %s\n", NUM_FOR_EDICT( ent ),
+		SV_GetString( ent->v.classname ), SV_GetString( ent->v.targetname ));
+	SV_EntSendVars( cl, ent );
 	return true;
+
+failed:
+	// A game callback may have freed and reused this edict. Never free its
+	// replacement or call further game callbacks on a rejected entity.
+	if( SV_IsValidEdict( ent ) && ent->serialnumber == serial )
+		SV_FreeEdict( ent );
+	SV_ClientPrintf( cl, "Failed to initialize entity \"%s\"\n", SV_GetString( classname ));
+	return false;
 }
 
 static qboolean SV_EntGetVars_f( sv_client_t *cl )

@@ -3772,6 +3772,9 @@ static void CL_InitLocal( void )
 	Cmd_AddRestrictedCommand ("ent_info", NULL, "dump entity information" );
 	Cmd_AddRestrictedCommand ("ent_create", NULL, "create entity with specified values (be careful)" );
 	Cmd_AddRestrictedCommand ("ent_getvars", NULL, "put parameters of specified entities to client's' ent_last_* cvars" );
+	// User aliases take precedence over commands. Provide a quiet default
+	// without replacing a configured entity-tools callback alias.
+	Cmd_AddCommand( "ent_getvars_cb", Cmd_Null_f, "default entity-tools callback (override with an alias)" );
 
 	// register our commands
 	Cmd_AddCommand ("pause", NULL, "pause the game (if the server allows pausing)" );
