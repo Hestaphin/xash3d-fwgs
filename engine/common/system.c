@@ -54,6 +54,7 @@ GNU General Public License for more details.
 
 #include "library.h"
 #include "whereami.h"
+#include "world_ballistic_query.h"
 
 int error_on_exit = 0;	// arg for exit();
 
@@ -690,6 +691,9 @@ void *Sys_GetNativeObject( const char *obj )
 
 	if( !Q_strcmp( obj, "MenuFactory" ))
 		return UI_GetMenuFactory();
+
+	if( !Q_strcmp( obj, WORLD_BALLISTIC_QUERY_OBJECT ))
+		return (void *)SV_GetWorldBallisticQuery();
 
 	void *ptr = FS_GetNativeObject( obj );
 

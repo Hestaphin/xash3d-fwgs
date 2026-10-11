@@ -1080,7 +1080,7 @@ if customentity is not NULL, will be set to true if "custom" export
 was used to create this entity
 ==============
 */
-static edict_t* SV_AllocPrivateData( edict_t *ent, string_t className, qboolean *customentity )
+static edict_t* SV_AllocPrivateData( edict_t *ent, string_t className, qboolean *customentity, qboolean reportError )
 {
 	const char	*pszClassName;
 	LINK_ENTITY_FUNC	SpawnEdict;
@@ -1120,7 +1120,8 @@ static edict_t* SV_AllocPrivateData( edict_t *ent, string_t className, qboolean 
 
 		if( !SpawnEdict )
 		{
-			Con_Printf( S_ERROR "No spawn function for \"%s\"\n", pszClassName );
+			if( reportError )
+				Con_Printf( S_ERROR "No spawn function for \"%s\"\n", pszClassName );
 
 			// free entity immediately
 			SV_FreeEdict( ent );
@@ -1143,7 +1144,14 @@ create specified entity, alloc private data
 */
 edict_t* SV_CreateNamedEntity( edict_t *ent, string_t className )
 {
-	return SV_AllocPrivateData( ent, className, NULL );
+	return SV_AllocPrivateData( ent, className, NULL, true );
+}
+
+// Entity tools have an additional restore-list factory fallback. Let them
+// report a failure only after all of their creation paths have failed.
+edict_t* SV_CreateNamedEntityQuiet( edict_t *ent, string_t className )
+{
+	return SV_AllocPrivateData( ent, className, NULL, false );
 }
 
 /*
@@ -4959,7 +4967,7 @@ static qboolean SV_ParseEdict( char **pfile, edict_t *ent )
 		return false;
 	}
 
-	ent = SV_AllocPrivateData( ent, ent->v.classname, &customentity );
+	ent = SV_AllocPrivateData( ent, ent->v.classname, &customentity, true );
 
 	if( !SV_IsValidEdict( ent ) || FBitSet( ent->v.flags, FL_KILLME ))
 	{
