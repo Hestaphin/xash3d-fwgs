@@ -619,6 +619,7 @@ void SV_QueueChangeLevel( const char *level, const char *landname );
 void SV_WriteEntityPatch( const char *filename );
 void SV_SpawnEntities( const char *mapname );
 edict_t* SV_CreateNamedEntity( edict_t *ent, string_t className );
+edict_t* SV_CreateNamedEntityQuiet( edict_t *ent, string_t className );
 string_t SV_AllocString( const char *szValue );
 string_t SV_MakeString( const char *szValue );
 const char *SV_GetString( string_t iString );

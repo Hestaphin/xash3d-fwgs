@@ -2831,7 +2831,7 @@ static void Mod_LoadTextureData( model_t *mod, dbspmodel_t *bmod, int textureInd
 	const uint texture_force_flags = r_allow_wad3_luma.value ? IL_ALLOW_WAD3_LUMA : 0;
 
 	// check for multi-layered sky texture (quake1 specific)
-	if( bmod->isworld && Q_strncmp( mipTex.name, "sky", 3 ) == 0 && ( mipTex.width / mipTex.height ) == 2 )
+	if( bmod->isworld && Q_strnicmp( mipTex.name, "sky", 3 ) == 0 && ( mipTex.width / mipTex.height ) == 2 )
 	{
 		Mod_InitSkyClouds( mod, &mipTex, mipRaw, texture, usesCustomPalette ); // load quake sky
 		return;
@@ -3324,6 +3324,25 @@ static void Mod_LoadTexInfo( model_t *mod, dbspmodel_t *bmod )
 Mod_LoadSurfaces
 =================
 */
+static void Mod_SetSurfaceTextureFlags( msurface_t *out )
+{
+	const texture_t *tex = out->texinfo->texture;
+	// BSP texture names retain their original spelling. Special prefixes
+	// must also recognize uppercase names such as SKY in legacy maps.
+	if( !Q_strnicmp( tex->name, "sky", 3 ))
+		SetBits( out->flags, SURF_DRAWSKY );
+	if( Mod_LooksLikeWaterTexture( tex->name ))
+		SetBits( out->flags, SURF_DRAWTURB );
+	if( !Q_strnicmp( tex->name, "scroll", 6 ) || FBitSet( out->texinfo->flags, TEX_SCROLL ))
+		SetBits( out->flags, SURF_CONVEYOR );
+	if( !Q_strnicmp( tex->name, "{scroll", 7 ))
+		SetBits( out->flags, SURF_CONVEYOR|SURF_TRANSPARENT );
+	if( tex->name[0] == '{' )
+		SetBits( out->flags, SURF_TRANSPARENT );
+	if( FBitSet( out->texinfo->flags, TEX_SPECIAL ))
+		SetBits( out->flags, SURF_DRAWTILED );
+}
+
 static void Mod_LoadSurfaces( model_t *mod, dbspmodel_t *bmod )
 {
 	int          test_lightsize = -1;
@@ -3385,29 +3404,7 @@ static void Mod_LoadSurfaces( model_t *mod, dbspmodel_t *bmod )
 			lightofs = in->lightofs;
 		}
 
-		texture_t	*tex = out->texinfo->texture;
-
-		if( !Q_strncmp( tex->name, "sky", 3 ))
-			SetBits( out->flags, SURF_DRAWSKY );
-
-		if( Mod_LooksLikeWaterTexture( tex->name ))
-			SetBits( out->flags, SURF_DRAWTURB );
-
-		if( !Q_strncmp( tex->name, "scroll", 6 ))
-			SetBits( out->flags, SURF_CONVEYOR );
-
-		if( FBitSet( out->texinfo->flags, TEX_SCROLL ))
-			SetBits( out->flags, SURF_CONVEYOR );
-
-		// g-cont. added a combined conveyor-transparent
-		if( !Q_strncmp( tex->name, "{scroll", 7 ))
-			SetBits( out->flags, SURF_CONVEYOR|SURF_TRANSPARENT );
-
-		if( tex->name[0] == '{' )
-			SetBits( out->flags, SURF_TRANSPARENT );
-
-		if( FBitSet( out->texinfo->flags, TEX_SPECIAL ))
-			SetBits( out->flags, SURF_DRAWTILED );
+		Mod_SetSurfaceTextureFlags( out );
 
 		Mod_CalcSurfaceBounds( mod, out, bmod );
 		Mod_CalcSurfaceExtents( mod, out, bmod );

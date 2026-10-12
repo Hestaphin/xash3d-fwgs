@@ -14,7 +14,9 @@ For example:
 
 `ent_create monster_zombie targetname zomb1`
 
-After creating entity, ent_last_xxx cvars are set to new entity and ent_last_cb called, look at ent_getvars description.
+After the game accepts and initializes the entity, `ent_last_*` cvars describe
+its final state and `ent_getvars_cb` is called. Rejected spawns report a failure
+and do not publish a new entity or call the callback. Look at `ent_getvars` below.
 
 ### ent_fire
 
@@ -62,7 +64,7 @@ Print information about entity by identificator.
 `ent_info <identificator>`
 
 ### ent_getvars
-Set client cvars containing entity information (useful for [scripting](extensions/console-scripting.md)) and then calls ent_last_cb.
+Set client cvars containing entity information (useful for [scripting](extensions/console-scripting.md)) and then call `ent_getvars_cb`.
 
 `ent_getvars <identificator>`
 
@@ -113,13 +115,16 @@ If value contains spaces, it must be put in quotes:
 
 ent_create and ent_getvars commands are setting cvars on client
 
-It can be used with ent_last_cb alias that is executed after setting cvars.
+Define an `ent_getvars_cb` alias to execute after the cvars are set. The engine
+provides a no-op command with that name, so no callback is required. An alias
+takes precedence over the default command and is never overwritten by the
+engine. Older versions of this page incorrectly called it `ent_last_cb`.
 
 Simple example:
 
 ```
+alias ent_getvars_cb "ent_fire \$ent_last_inst use"
 ent_create weapon_c4
-alias ent_last_cb "ent_fire \$ent_last_inst use"
 ```
 
 Use weapon_c4 after creating it.
@@ -132,7 +137,7 @@ Example:
 
 > example.cfg
 ```
-alias ent_last_cb exec entity_cb.cfg
+alias ent_getvars_cb exec entity_cb.cfg
 ent create \<class\> targetname my_ent1_$name
 ent_create \<class\> targetname my_ent2_$name
 ```

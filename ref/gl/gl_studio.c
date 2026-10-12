@@ -2338,15 +2338,24 @@ R_StudioSetupPlayerModel
 */
 static model_t *R_StudioSetupPlayerModel( int index )
 {
-	player_info_t  *info = gEngfuncs.pfnPlayerInfo( index );
-
 	if( index < 0 || index >= gp_cl->maxclients )
 		return NULL;
 
+	player_info_t *info = gEngfuncs.pfnPlayerInfo( index );
 	player_model_t *state = &g_studio.player_models[index];
+	cl_entity_t *entity = RI.currententity;
+	const qboolean menuPreview = entity && !FBitSet( RI.rvp.flags, RF_DRAW_WORLD );
+	const qboolean playerEntity = entity && entity->player && entity->index == index + 1;
+	const qboolean deadPlayerEntity = entity && entity->curstate.renderfx == kRenderFxDeadPlayer && entity->curstate.renderamt == index + 1;
+
+	// Prediction and network latching select a model before any draw entity is
+	// installed. A previous world/other-player draw is not this player's model.
+	if( !entity || ( !menuPreview && !playerEntity && !deadPlayerEntity ))
+		entity = CL_GetEntityByIndex( index + 1 );
+	model_t *fallback = entity ? entity->model : NULL;
 
 	// g-cont: force for "dev-mode", non-local games and menu preview
-	if(( gpGlobals->developer || !ENGINE_GET_PARM( PARM_SINGLEPLAYER_GAME ) || !FBitSet( RI.rvp.flags, RF_DRAW_WORLD ) ) && info->model[0] )
+	if( info && ( gpGlobals->developer || !ENGINE_GET_PARM( PARM_SINGLEPLAYER_GAME ) || menuPreview ) && info->model[0] )
 	{
 		if( Q_strcmp( state->name, info->model ))
 		{
@@ -2360,14 +2369,14 @@ static model_t *R_StudioSetupPlayerModel( int index )
 			else
 				state->model = NULL;
 
-			if( !state->model )
-				state->model = RI.currententity->model;
 		}
+		// Keep an unsuccessful named lookup separate from the entity fallback:
+		// that fallback can change on the next network update or map.
+		return state->model ? state->model : fallback;
 	}
 	else
 	{
-		if( state->model != RI.currententity->model )
-			state->model = RI.currententity->model;
+		state->model = fallback;
 		state->name[0] = 0;
 	}
 
